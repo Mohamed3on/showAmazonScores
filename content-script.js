@@ -43,11 +43,12 @@ const getRatingScores = async (productSIN, elementToReplace, numOfRatings) => {
   const scorePercentage = fiveStars - oneStars;
   const scoreAbsolute = Math.round(parseInt(numOfRatings) * (scorePercentage / 100));
 
-  elementToReplace.innerHTML = ` ${numberWithCommas(
-    scoreAbsolute
-  )} ratings (ratio: ${scorePercentage}%)`;
+  const calculatedScore = Math.round(scoreAbsolute * (scorePercentage / 100), 2);
 
-  return { scorePercentage, scoreAbsolute };
+  elementToReplace.innerHTML = ` ${numberWithCommas(calculatedScore)} ratio: (${scorePercentage}%)`;
+  checkedProducts.push(productSIN);
+
+  return { calculatedScore };
 };
 
 const getProductSIN = () => {

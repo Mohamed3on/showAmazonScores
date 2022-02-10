@@ -15,6 +15,7 @@
         "*://*.amazon.co.jp/*",
         "*://*.amazon.it/*",
         "*://*.amazon.in/*",
+        "*://*.amazon.eg/*",
         "*://*.amazon.es/*",
         "*://*.amazon.cn/*",
         "*://*.amazon.ca/*",
