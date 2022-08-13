@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "name": "Show Amazon product scores",
-  "version": "0.11",
+  "version": "1.0",
   "description": "Shows custom scores for Amazon products",
   "author": "Mohamed Oun",
   "permissions": ["tabs"],
