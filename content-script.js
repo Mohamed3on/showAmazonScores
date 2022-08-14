@@ -66,7 +66,7 @@ const setTotalRatingsScore = (totalRatingPercentages, elementToReplace, numOfRat
 
   elementToReplace.innerHTML = ` ${numberWithCommas(calculatedScore)} ratio: (${scorePercentage}%)`;
 
-  return { scoreAbsolute, totalScorePercentage: scorePercentage / 100 };
+  return { calculatedScore, totalScorePercentage: scorePercentage / 100 };
 };
 
 const getRatingSummary = async (productSIN, numOfRatingsElement, numOfRatings) => {
@@ -90,12 +90,12 @@ const getRatingSummary = async (productSIN, numOfRatingsElement, numOfRatings) =
     const recentRatingsHTML = await recentRatings.text();
     if (!totalRatingPercentages) {
       totalRatingPercentages = getRatingPercentages(recentRatingsHTML);
-      let { scoreAbsolute, totalScorePercentage } = setTotalRatingsScore(
+      let { calculatedScore, totalScorePercentage } = setTotalRatingsScore(
         totalRatingPercentages,
         numOfRatingsElement,
         numOfRatings
       );
-      scores.total = { absolute: scoreAbsolute, percentage: totalScorePercentage };
+      scores.total = { absolute: calculatedScore, percentage: totalScorePercentage };
     }
 
     const document = parser.parseFromString(recentRatingsHTML, 'text/html');
@@ -121,14 +121,25 @@ const getRatingSummary = async (productSIN, numOfRatingsElement, numOfRatings) =
     }
   }
 
-  scores.recent.percentage = (scores.recent.absolute / numberOfParsedReviews).toFixed(2);
-  const totalCombineDifference = Math.round(
-    scores.total.absolute * scores.total.percentage * scores.recent.percentage
-  );
+  let text;
+
+  if (numberOfParsedReviews > 0) {
+    scores.recent.percentage = (scores.recent.absolute / numberOfParsedReviews).toFixed(2);
+
+    const percentageDifference = scores.total.percentage - scores.recent.percentage;
+    const trendingWeighting = 1 - percentageDifference;
+
+    const totalCombineDifference = Math.round(scores.total.absolute * trendingWeighting);
+
+    text = `recent reviews: ${scores.recent.percentage * 100}% trending score: ${numberWithCommas(
+      totalCombineDifference
+    )}`;
+  } else text = `No local reviews for this product!`;
 
   const elementToAppendTo = document.querySelector('#averageCustomerReviews');
 
   let { backgroundColor, textColor } = getColorForPercentage(scores.recent.percentage);
+
   const newDiv = document.createElement('a');
   newDiv.href = recentRatingsURL;
   newDiv.style = `
@@ -140,9 +151,7 @@ const getRatingSummary = async (productSIN, numOfRatingsElement, numOfRatings) =
   background-color: ${backgroundColor};
   box-shadow: 0 4px 6px 0 hsl(0deg 0% 0% / 20%);
 `;
-  newDiv.innerText = `recent reviews: ${
-    scores.recent.percentage * 100
-  }% trending score: ${numberWithCommas(totalCombineDifference)}`;
+  newDiv.innerText = `${text}`;
   elementToAppendTo.appendChild(newDiv);
   return scores;
 };
