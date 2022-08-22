@@ -56,6 +56,40 @@ const getRatingPercentages = (ratingText) => {
   };
 };
 
+const injectBestFormats = (formatRatings) => {
+  if (!Object.keys(formatRatings).length) return;
+
+  let sortedFormats = [];
+  for (var format in formatRatings) {
+    if (formatRatings[format] > 0) {
+      sortedFormats.push([format, formatRatings[format]]);
+    }
+
+    sortedFormats.sort(function (a, b) {
+      return b[1] - a[1];
+    });
+  }
+
+  const table = document.createElement('table');
+  table.className = 'format-table';
+  let header = table.createTHead();
+  var row = header.insertRow(0);
+  var cell = row.insertCell(0);
+  cell.innerHTML = 'Trending variations';
+
+  let secondCell = row.insertCell(1);
+  secondCell.innerHTML = 'Score';
+  const body = table.createTBody();
+  sortedFormats.forEach((property) => {
+    const row = body.insertRow();
+    row.insertCell().innerHTML = property[0];
+    row.insertCell().innerHTML = property[1];
+  });
+
+  const buyBox = document.querySelector('#desktop_buybox');
+  buyBox.parentNode.insertBefore(table, buyBox);
+};
+
 const setTotalRatingsScore = (totalRatingPercentages, elementToReplace, numOfRatings) => {
   const { fiveStars, oneStars } = totalRatingPercentages;
 
@@ -71,16 +105,17 @@ const setTotalRatingsScore = (totalRatingPercentages, elementToReplace, numOfRat
 
 const getRatingSummary = async (productSIN, numOfRatingsElement, numOfRatings) => {
   let numberOfParsedReviews = 0;
-  const numberOfPages = 5;
+  const numberOfPagesToParse = 5;
   const scores = { recent: { absolute: 0, percentage: 0 }, total: { absolute: 0, percentage: 0 } };
   const starRatingsToLikeDislikeMapping = { 5: 1, 1: -1 };
   const numberOfReviewsPerPage = 10;
   let totalRatingPercentages;
+  const formatRatings = {};
 
   const recentRatingsURL = `https://www.amazon.${getTLD()}/product-reviews/${productSIN}/?sortBy=recent`;
   const parser = new DOMParser();
 
-  for (let i = 1; i <= numberOfPages; i++) {
+  for (let i = 1; i <= numberOfPagesToParse; i++) {
     const recentRatings = await fetch(`${recentRatingsURL}&pageNumber=${i}`, {
       body: null,
       method: 'GET',
@@ -100,18 +135,29 @@ const getRatingSummary = async (productSIN, numOfRatingsElement, numOfRatings) =
 
     const document = parser.parseFromString(recentRatingsHTML, 'text/html');
 
-    // TODO: add best variant to this
-    // const reviews = document.querySelectorAll('[data-hook="review"]');
-    // const format = review.querySelector('a[data-hook="format-strip"]');
+    const reviews = document.querySelectorAll('[data-hook="review"]');
     const ratingElements = document.querySelectorAll('[data-hook="review-star-rating"]');
 
-    for (const ratingElement of ratingElements) {
+    for (const review of reviews) {
+      const ratingElement = review.querySelector('[data-hook="review-star-rating"]');
+
+      // this means it's an "international" review, not from the current country
+      if (!ratingElement) break;
+
       numberOfParsedReviews++;
+      const format = review.querySelector('a[data-hook="format-strip"]');
 
       const ratingText = ratingElement.innerText;
       const rating = parseInt(ratingText.match(/\d(?=\.)/g)[0]);
 
       if (rating === 5 || rating === 1) {
+        if (format) {
+          let cleanedFormat = format.innerHTML.replaceAll(' Name:', ':');
+          formatRatings[cleanedFormat] = formatRatings[cleanedFormat]
+            ? formatRatings[cleanedFormat] + starRatingsToLikeDislikeMapping[rating]
+            : starRatingsToLikeDislikeMapping[rating];
+        }
+
         scores.recent.absolute += starRatingsToLikeDislikeMapping[rating];
       }
     }
@@ -140,20 +186,17 @@ const getRatingSummary = async (productSIN, numOfRatingsElement, numOfRatings) =
 
   let { backgroundColor, textColor } = getColorForPercentage(scores.recent.percentage);
 
-  const newDiv = document.createElement('a');
-  newDiv.href = recentRatingsURL;
-  newDiv.style = `
-  padding: 4px;
-  margin: 8px 0;
-  display: flex;
-  border-radius: 4px;
+  const recentReviews = document.createElement('a');
+  recentReviews.className = 'recent-reviews';
+  recentReviews.href = recentRatingsURL;
+  recentReviews.style = `
   color: ${textColor};
   background-color: ${backgroundColor};
-  box-shadow: 0 4px 6px 0 hsl(0deg 0% 0% / 20%);
 `;
-  newDiv.innerText = `${text}`;
-  elementToAppendTo.appendChild(newDiv);
-  return scores;
+  recentReviews.innerText = `${text}`;
+  elementToAppendTo.appendChild(recentReviews);
+
+  injectBestFormats(formatRatings);
 };
 
 const getProductSIN = () => {
