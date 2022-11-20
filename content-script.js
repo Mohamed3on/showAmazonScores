@@ -105,7 +105,7 @@ const setTotalRatingsScore = (totalRatingPercentages, elementToReplace, numOfRat
 
 const getRatingSummary = async (productSIN, numOfRatingsElement, numOfRatings) => {
   let numberOfParsedReviews = 0;
-  const numberOfPagesToParse = 5;
+  const numberOfPagesToParse = 6;
   const scores = { recent: { absolute: 0, percentage: 0 }, total: { absolute: 0, percentage: 0 } };
   const starRatingsToLikeDislikeMapping = { 5: 1, 1: -1 };
   const numberOfReviewsPerPage = 10;
