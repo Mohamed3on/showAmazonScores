@@ -172,13 +172,12 @@ const getRatingSummary = async (productSIN, numOfRatingsElement, numOfRatings) =
   if (numberOfParsedReviews > 0) {
     scores.recent.percentage = (scores.recent.absolute / numberOfParsedReviews).toFixed(2);
 
-    const percentageDifference = scores.total.percentage - scores.recent.percentage;
-    const trendingWeighting = 1 - percentageDifference;
+    const trendingPercentage = scores.recent.percentage;
 
-    const totalCombineDifference = Math.round(scores.total.absolute * trendingWeighting);
+    const trendingScore = Math.round(scores.total.absolute * trendingPercentage);
 
     text = `recent reviews: ${scores.recent.percentage * 100}% trending score: ${numberWithCommas(
-      totalCombineDifference
+      trendingScore
     )}`;
   } else text = `No local reviews for this product!`;
 
