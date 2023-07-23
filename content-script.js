@@ -106,7 +106,10 @@ const setTotalRatingsScore = (totalRatingPercentages, elementToReplace, numOfRat
 const getRatingSummary = async (productSIN, numOfRatingsElement, numOfRatings) => {
   let numberOfParsedReviews = 0;
   const numberOfPagesToParse = 6;
-  const scores = { recent: { absolute: 0, percentage: 0 }, total: { absolute: 0, percentage: 0 } };
+  const scores = {
+    recent: { absolute: 0, percentage: 0 },
+    total: { calculated: 0, percentage: 0 },
+  };
   const starRatingsToLikeDislikeMapping = { 5: 1, 1: -1 };
   const numberOfReviewsPerPage = 10;
   let totalRatingPercentages;
@@ -130,7 +133,7 @@ const getRatingSummary = async (productSIN, numOfRatingsElement, numOfRatings) =
         numOfRatingsElement,
         numOfRatings
       );
-      scores.total = { absolute: calculatedScore, percentage: totalScorePercentage };
+      scores.total = { calculated: calculatedScore, percentage: totalScorePercentage };
     }
 
     const document = parser.parseFromString(recentRatingsHTML, 'text/html');
@@ -174,7 +177,7 @@ const getRatingSummary = async (productSIN, numOfRatingsElement, numOfRatings) =
 
     const trendingPercentage = scores.recent.percentage;
 
-    const trendingScore = Math.round(scores.total.absolute * trendingPercentage);
+    const trendingScore = Math.round(scores.total.calculated * trendingPercentage);
 
     text = `recent reviews: ${scores.recent.percentage * 100}% trending score: ${numberWithCommas(
       trendingScore
@@ -202,7 +205,7 @@ const getProductSIN = () => {
   let productSINMatches = window.location.toString().match(/(?<=\/(dp|product)\/)([A-Z0-9]+)/g);
   return productSINMatches && productSINMatches[0];
 };
-const productPageScript = async () => {};
+
 (async function main() {
   const productSIN = getProductSIN();
   if (!productSIN) return;
@@ -210,7 +213,5 @@ const productPageScript = async () => {};
   const numOfRatings = numOfRatingsElement.textContent
     .match(/\d{1,4}(,\d{0,3})?/g)[0]
     .replace(',', '');
-  console.time('getRatingSummary');
   await getRatingSummary(productSIN, numOfRatingsElement, numOfRatings);
-  console.timeEnd('getRatingSummary');
 })();
