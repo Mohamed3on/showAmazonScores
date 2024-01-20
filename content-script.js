@@ -1,3 +1,5 @@
+const NUMBER_OF_PAGES_TO_PARSE = 7;
+
 function getColor(value) {
   //value from 0 to 1
   var hue = (value * 120).toString(10);
@@ -33,26 +35,21 @@ var getColorForPercentage = function (pct) {
   // or output as hex if preferred
 };
 
-const getTLD = () => {
-  const isUK = window.location.origin.endsWith('.co.uk');
-  if (isUK) return 'co.uk';
-  return window.location.origin.split('.').pop();
-};
-
 const numberWithCommas = (x) => x.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 
-const getRatingPercentages = (ratingText) => {
-  let matches = ratingText.match(/\d+(?=% of reviews have 5 stars)/g);
-  if (matches) {
-    let oneMatches = ratingText.match(/\d+(?=% of reviews have 1 stars)/g);
-    return {
-      fiveStars: ratingText.match(/\d+(?=% of reviews have 5 stars)/g)[0],
-      oneStars: oneMatches ? oneMatches[0] : 0,
-    };
+const getRatingPercentages = (htmlText) => {
+  let matches = htmlText.match(/aria-valuenow="(\d+)%"/g);
+
+  if (!matches || matches.length < 2) {
+    return { fiveStars: 0, oneStars: 0 };
   }
+
+  let fiveStars = matches[0].match(/(\d+)%/)[1];
+  let oneStars = matches[matches.length - 1].match(/(\d+)%/)[1];
+
   return {
-    fiveStars: ratingText.match(/(?<=5 stars represent )(\d+)/g)[0] || 0,
-    oneStars: ratingText.match(/(?<=1 stars represent )(\d+)/g)?.[0] || 0,
+    fiveStars: fiveStars,
+    oneStars: oneStars,
   };
 };
 
@@ -105,7 +102,6 @@ const setTotalRatingsScore = (totalRatingPercentages, elementToReplace, numOfRat
 
 const getRatingSummary = async (productSIN, numOfRatingsElement, numOfRatings) => {
   let numberOfParsedReviews = 0;
-  const numberOfPagesToParse = 6;
   const scores = {
     recent: { absolute: 0, percentage: 0 },
     total: { calculated: 0, percentage: 0 },
@@ -115,10 +111,10 @@ const getRatingSummary = async (productSIN, numOfRatingsElement, numOfRatings) =
   let totalRatingPercentages;
   const formatRatings = {};
 
-  const recentRatingsURL = `https://www.amazon.${getTLD()}/product-reviews/${productSIN}/?sortBy=recent`;
+  const recentRatingsURL = `/product-reviews/${productSIN}/?sortBy=recent`;
   const parser = new DOMParser();
 
-  for (let i = 1; i <= numberOfPagesToParse; i++) {
+  for (let i = 1; i <= NUMBER_OF_PAGES_TO_PARSE; i++) {
     const recentRatings = await fetch(`${recentRatingsURL}&pageNumber=${i}`, {
       body: null,
       method: 'GET',
