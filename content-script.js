@@ -36,9 +36,8 @@ var getColorForPercentage = function (pct) {
 };
 
 const numberWithCommas = (x) => x.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-
 const getRatingPercentages = (htmlText) => {
-  let matches = htmlText.match(/aria-valuenow="(\d+)"/g);
+  let matches = htmlText.match(/aria-valuenow="(\d+)%?"/g);
 
   if (!matches || matches.length < 2) {
     return { fiveStars: 0, oneStars: 0 };
