@@ -38,14 +38,14 @@ var getColorForPercentage = function (pct) {
 const numberWithCommas = (x) => x.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 
 const getRatingPercentages = (htmlText) => {
-  let matches = htmlText.match(/aria-valuenow="(\d+)%"/g);
+  let matches = htmlText.match(/aria-valuenow="(\d+)"/g);
 
   if (!matches || matches.length < 2) {
     return { fiveStars: 0, oneStars: 0 };
   }
 
-  let fiveStars = matches[0].match(/(\d+)%/)[1];
-  let oneStars = matches[matches.length - 1].match(/(\d+)%/)[1];
+  let fiveStars = matches[0].match(/(\d+)/)[1];
+  let oneStars = matches[matches.length - 1].match(/(\d+)/)[1];
 
   return {
     fiveStars: fiveStars,
