@@ -113,14 +113,22 @@ const getRatingSummary = async (productSIN, numOfRatingsElement, numOfRatings) =
   const recentRatingsURL = `/product-reviews/${productSIN}/?sortBy=recent`;
   const parser = new DOMParser();
 
-  for (let i = 1; i <= NUMBER_OF_PAGES_TO_PARSE; i++) {
-    const recentRatings = await fetch(`${recentRatingsURL}&pageNumber=${i}`, {
+  const fetchReviewPage = async (pageNumber) => {
+    const recentRatings = await fetch(`${recentRatingsURL}&pageNumber=${pageNumber}`, {
       body: null,
       method: 'GET',
       mode: 'cors',
       credentials: 'include',
     });
-    const recentRatingsHTML = await recentRatings.text();
+    return await recentRatings.text();
+  };
+
+  const fetchPromises = Array.from({ length: NUMBER_OF_PAGES_TO_PARSE }, (_, i) =>
+    fetchReviewPage(i + 1)
+  );
+  const reviewPages = await Promise.all(fetchPromises);
+
+  for (const recentRatingsHTML of reviewPages) {
     if (!totalRatingPercentages) {
       totalRatingPercentages = getRatingPercentages(recentRatingsHTML);
       let { calculatedScore, totalScorePercentage } = setTotalRatingsScore(
