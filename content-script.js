@@ -126,7 +126,10 @@ const getRatingSummary = async (productSIN, numOfRatingsElement, numOfRatings) =
   const fetchPromises = Array.from({ length: NUMBER_OF_PAGES_TO_PARSE }, (_, i) =>
     fetchReviewPage(i + 1)
   );
-  const reviewPages = await Promise.all(fetchPromises);
+  const results = await Promise.allSettled(fetchPromises);
+  const reviewPages = results
+    .filter((result) => result.status === 'fulfilled')
+    .map((result) => result.value);
 
   for (const recentRatingsHTML of reviewPages) {
     if (!totalRatingPercentages) {
@@ -213,8 +216,13 @@ const getProductSIN = () => {
   const productSIN = getProductSIN();
   if (!productSIN) return;
   const numOfRatingsElement = document.getElementById('acrCustomerReviewLink');
-  const numOfRatings = numOfRatingsElement.textContent
-    .match(/\d{1,4}(,\d{0,3})?/g)[0]
+  const ratingText = numOfRatingsElement.textContent
+    .match(/(\d{1,3}(,\d{3})*(\.\d+)?|\d+(\.\d+)?)[K]?/)[0]
     .replace(',', '');
+
+  const numOfRatings = ratingText.endsWith('K')
+    ? Math.round(parseFloat(ratingText.replace('K', '')) * 1000)
+    : ratingText;
+
   await getRatingSummary(productSIN, numOfRatingsElement, numOfRatings);
 })();
