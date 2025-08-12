@@ -1,4 +1,4 @@
-const NUMBER_OF_PAGES_TO_PARSE = 7;
+const NUMBER_OF_PAGES_TO_PARSE = 10;
 
 function getColor(value) {
   //value from 0 to 1
@@ -37,19 +37,27 @@ var getColorForPercentage = function (pct) {
 
 const numberWithCommas = (x) => x.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 const getRatingPercentages = (htmlText) => {
-  let matches = htmlText.match(/aria-valuenow="(\d+)%?"/g);
+  try {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(htmlText || '', 'text/html');
+    const nodes = doc.querySelectorAll('[role="progressbar"][aria-valuenow]');
+    const values = Array.from(nodes)
+      .map((el) => el.getAttribute('aria-valuenow'))
+      .filter(Boolean)
+      .map((v) => parseInt(String(v).replace('%', ''), 10))
+      .filter((n) => Number.isFinite(n));
 
-  if (!matches || matches.length < 2) {
+    if (values.length < 2) {
+      return { fiveStars: 0, oneStars: 0 };
+    }
+
+    const fiveStars = values[0];
+    const oneStars = values[values.length - 1];
+
+    return { fiveStars, oneStars };
+  } catch (_) {
     return { fiveStars: 0, oneStars: 0 };
   }
-
-  let fiveStars = matches[0].match(/(\d+)/)[1];
-  let oneStars = matches[matches.length - 1].match(/(\d+)/)[1];
-
-  return {
-    fiveStars: fiveStars,
-    oneStars: oneStars,
-  };
 };
 
 const injectBestFormats = (formatRatings) => {
@@ -113,28 +121,113 @@ const getRatingSummary = async (productSIN, numOfRatingsElement, numOfRatings) =
   const recentRatingsURL = `/product-reviews/${productSIN}/?sortBy=recent`;
   const parser = new DOMParser();
 
-  const fetchReviewPage = async (pageNumber) => {
-    const recentRatings = await fetch(`${recentRatingsURL}&pageNumber=${pageNumber}`, {
-      body: null,
-      method: 'GET',
-      mode: 'cors',
-      credentials: 'include',
-    });
-    return await recentRatings.text();
+  const extractReviewListHTMLFromAjaxResponse = (raw) => {
+    if (!raw) return '';
+    const chunks = raw.split('&&&');
+    let html = '';
+    for (const chunk of chunks) {
+      const trimmed = chunk.trim();
+      if (!trimmed) continue;
+      try {
+        const payload = JSON.parse(trimmed);
+        if (
+          Array.isArray(payload) &&
+          payload.length >= 3 &&
+          payload[0] === 'append' &&
+          payload[1] === '#cm_cr-review_list' &&
+          typeof payload[2] === 'string'
+        ) {
+          html += payload[2];
+        }
+      } catch (_) {
+        // ignore non-JSON chunks
+      }
+    }
+    return html;
   };
 
-  const fetchPromises = Array.from({ length: NUMBER_OF_PAGES_TO_PARSE }, (_, i) =>
+  const getAntiCsrfToken = () => {
+    const stateElement = document.querySelector('#cr-state-object');
+    if (stateElement && stateElement.dataset.state) {
+      try {
+        const stateData = JSON.parse(stateElement.dataset.state);
+        return stateData.reviewsCsrfToken;
+      } catch (_) {}
+    }
+    return undefined;
+  };
+
+  const getReviewsAjaxScopeFromDOM = () => {
+    try {
+      const html = document.documentElement.innerHTML;
+      const matches = [...html.matchAll(/reviewsAjax(\d+)/g)];
+      if (matches.length) {
+        const maxIdx = matches
+          .map((m) => parseInt(m[1], 10))
+          .filter((n) => Number.isFinite(n))
+          .reduce((a, b) => Math.max(a, b), 0);
+        return `reviewsAjax${maxIdx}`;
+      }
+    } catch (_) {}
+    return 'reviewsAjax0';
+  };
+
+  const fetchReviewPage = async (pageNumber) => {
+    const endpoint = `/hz/reviews-render/ajax/reviews/get/ref=cm_cr_getr_d_paging_btm_next_${pageNumber}`;
+    const form = new URLSearchParams({
+      sortBy: 'recent',
+      pageNumber: String(pageNumber),
+      pageSize: String(numberOfReviewsPerPage),
+      asin: productSIN,
+      scope: getReviewsAjaxScopeFromDOM(),
+      reftag: `cm_cr_getr_d_paging_btm_next_${pageNumber}`
+    });
+
+    const antiCsrf = getAntiCsrfToken();
+
+    const res = await fetch(endpoint, {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        'x-requested-with': 'XMLHttpRequest',
+        ...(antiCsrf ? { 'anti-csrftoken-a2z': antiCsrf } : {}),
+      },
+      body: form,
+    });
+    const raw = await res.text();
+    return extractReviewListHTMLFromAjaxResponse(raw);
+  };
+
+  // try to compute total ratings from the current product page first
+  try {
+    const pageHTML = document.documentElement.innerHTML;
+    const totals = getRatingPercentages(pageHTML);
+    if (totals.fiveStars || totals.oneStars) {
+      totalRatingPercentages = totals;
+      const { calculatedScore, totalScorePercentage } = setTotalRatingsScore(
+        totalRatingPercentages,
+        numOfRatingsElement,
+        numOfRatings
+      );
+      scores.total = { calculated: calculatedScore, percentage: totalScorePercentage };
+    }
+  } catch (_) {}
+
+  const pagePromises = Array.from({ length: NUMBER_OF_PAGES_TO_PARSE }, (_, i) => 
     fetchReviewPage(i + 1)
   );
-  const results = await Promise.allSettled(fetchPromises);
+  
+  const results = await Promise.allSettled(pagePromises);
   const reviewPages = results
-    .filter((result) => result.status === 'fulfilled')
-    .map((result) => result.value);
+    .filter(result => result.status === 'fulfilled')
+    .map(result => result.value);
 
   for (const recentRatingsHTML of reviewPages) {
+    if (!recentRatingsHTML) continue;
+
     if (!totalRatingPercentages) {
       totalRatingPercentages = getRatingPercentages(recentRatingsHTML);
-      let { calculatedScore, totalScorePercentage } = setTotalRatingsScore(
+      const { calculatedScore, totalScorePercentage } = setTotalRatingsScore(
         totalRatingPercentages,
         numOfRatingsElement,
         numOfRatings
@@ -142,15 +235,11 @@ const getRatingSummary = async (productSIN, numOfRatingsElement, numOfRatings) =
       scores.total = { calculated: calculatedScore, percentage: totalScorePercentage };
     }
 
-    const document = parser.parseFromString(recentRatingsHTML, 'text/html');
-
-    const reviews = document.querySelectorAll('[data-hook="review"]');
-    const ratingElements = document.querySelectorAll('[data-hook="review-star-rating"]');
+    const syntheticDocument = parser.parseFromString(recentRatingsHTML, 'text/html');
+    const reviews = syntheticDocument.querySelectorAll('[data-hook="review"]');
 
     for (const review of reviews) {
       const ratingElement = review.querySelector('[data-hook="review-star-rating"]');
-
-      // this means it's an "international" review, not from the current country
       if (!ratingElement) break;
 
       numberOfParsedReviews++;
@@ -161,18 +250,13 @@ const getRatingSummary = async (productSIN, numOfRatingsElement, numOfRatings) =
 
       if (rating === 5 || rating === 1) {
         if (format) {
-          let cleanedFormat = format.innerHTML.replaceAll(' Name:', ':');
+          const cleanedFormat = format.innerHTML.replaceAll(' Name:', ':');
           formatRatings[cleanedFormat] = formatRatings[cleanedFormat]
             ? formatRatings[cleanedFormat] + starRatingsToLikeDislikeMapping[rating]
             : starRatingsToLikeDislikeMapping[rating];
         }
-
         scores.recent.absolute += starRatingsToLikeDislikeMapping[rating];
       }
-    }
-    // it means we reached the end of the local reviews, so we can stop the parsing
-    if (ratingElements.length < numberOfReviewsPerPage) {
-      break;
     }
   }
 
